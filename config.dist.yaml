@@ -1,0 +1,72 @@
+# Mikrotik Prometheus Exporter Configuration Template
+# Copy this file to config.yaml and modify as needed
+
+# Authentication configurations
+# You can define multiple authentication profiles for different devices
+auths:
+  # Default authentication - modify these credentials
+  default:
+    username: admin
+    password: admin
+  
+  # Example production authentication
+  production:
+    username: monitoring
+    password: your_secure_password_here
+  
+  # Example for devices with different credentials
+  # office_router:
+  #   username: monitor
+  #   password: office_password
+  
+  # home_router:
+  #   username: homeadmin
+  #   password: home_password
+
+# Module configurations
+# Define which collectors to enable for different device types or use cases
+modules:
+  # Default module with all collectors enabled
+  default:
+    collectors:
+      interfaces: true    # Network interface metrics (RX/TX bytes, packets, status)
+      dhcp: true         # DHCP server and lease metrics
+      bgp: true          # BGP peer status and prefix information
+      system: true       # System metrics (uptime, CPU, memory, disk, temperature)
+      wireless: true     # Wireless interface and client metrics
+      
+  # Minimal module for basic monitoring
+  minimal:
+    collectors:
+      interfaces: true
+      system: true
+      dhcp: false
+      bgp: false
+      wireless: false
+      
+  # Network-focused module for routers
+  router:
+    collectors:
+      interfaces: true
+      bgp: true
+      system: true
+      dhcp: false
+      wireless: false
+      
+  # Access point focused module
+  access_point:
+    collectors:
+      interfaces: true
+      wireless: true
+      system: true
+      dhcp: true
+      bgp: false
+      
+  # Core router module (no wireless/DHCP)
+  core:
+    collectors:
+      interfaces: true
+      bgp: true
+      system: true
+      dhcp: false
+      wireless: false
