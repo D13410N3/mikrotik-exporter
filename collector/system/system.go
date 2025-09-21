@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -26,6 +27,8 @@ type Collector struct {
 	totalMemoryDesc    *prometheus.Desc
 	freeMemoryDesc     *prometheus.Desc
 	uptimeDesc         *prometheus.Desc
+	voltageDesc        *prometheus.Desc
+	temperatureDesc    *prometheus.Desc
 	namespace          string
 }
 
@@ -51,6 +54,14 @@ type SystemResourceData struct {
 	WriteSectTotal       string `json:"write-sect-total"`
 }
 
+// SystemHealthData represents the structure returned by Mikrotik system health API
+type SystemHealthData struct {
+	ID    string `json:".id"`
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
 // NewCollector creates a new system collector
 func NewCollector() *Collector {
 	c := &Collector{
@@ -62,13 +73,11 @@ func NewCollector() *Collector {
 
 // initMetrics initializes the metric descriptors with the current namespace
 func (c *Collector) initMetrics() {
-	targetLabel := []string{"target"}
-
 	// System info metric with additional labels
 	c.systemInfoDesc = prometheus.NewDesc(
 		c.namespace+"_system_info",
 		"System information",
-		[]string{"target", "board_name", "cpu_model", "version", "platform"},
+		[]string{"board_name", "cpu_model", "version", "platform"},
 		nil,
 	)
 
@@ -76,58 +85,70 @@ func (c *Collector) initMetrics() {
 	c.cpuCoresDesc = prometheus.NewDesc(
 		c.namespace+"_system_cpu_cores",
 		"Number of CPU cores",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.cpuFreqDesc = prometheus.NewDesc(
 		c.namespace+"_system_cpu_freq",
 		"CPU frequency in MHz",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.cpuLoadDesc = prometheus.NewDesc(
 		c.namespace+"_system_cpu_load",
 		"CPU load percentage",
-		targetLabel, nil,
+		nil, nil,
 	)
 
 	// Disk metrics
 	c.totalDiskDesc = prometheus.NewDesc(
 		c.namespace+"_system_total_disk",
 		"Total disk space in bytes",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.freeDiskDesc = prometheus.NewDesc(
 		c.namespace+"_system_free_disk",
 		"Free disk space in bytes",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.badBlocksDesc = prometheus.NewDesc(
 		c.namespace+"_system_bad_blocks",
 		"Number of bad blocks",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.writeSectTotalDesc = prometheus.NewDesc(
 		c.namespace+"_system_write_sect_total",
 		"Total write sectors",
-		targetLabel, nil,
+		nil, nil,
 	)
 
 	// Memory metrics
 	c.totalMemoryDesc = prometheus.NewDesc(
 		c.namespace+"_system_total_memory",
 		"Total memory in bytes",
-		targetLabel, nil,
+		nil, nil,
 	)
 	c.freeMemoryDesc = prometheus.NewDesc(
 		c.namespace+"_system_free_memory",
 		"Free memory in bytes",
-		targetLabel, nil,
+		nil, nil,
 	)
 
 	// Uptime metric
 	c.uptimeDesc = prometheus.NewDesc(
 		c.namespace+"_system_uptime",
 		"System uptime in seconds",
-		targetLabel, nil,
+		nil, nil,
+	)
+
+	// Health metrics
+	c.voltageDesc = prometheus.NewDesc(
+		c.namespace+"_system_voltage",
+		"System voltage in volts",
+		nil, nil,
+	)
+	c.temperatureDesc = prometheus.NewDesc(
+		c.namespace+"_system_temperature",
+		"System temperature in Celsius",
+		nil, nil,
 	)
 }
 
@@ -149,6 +170,8 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.totalMemoryDesc
 	ch <- c.freeMemoryDesc
 	ch <- c.uptimeDesc
+	ch <- c.voltageDesc
+	ch <- c.temperatureDesc
 }
 
 // SetNamespace sets the metrics namespace prefix
@@ -165,52 +188,69 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 		return fmt.Errorf("failed to fetch system resource: %w", err)
 	}
 
-	targetLabel := []string{target}
-
 	// System info metric with labels
 	ch <- prometheus.MustNewConstMetric(
 		c.systemInfoDesc,
 		prometheus.GaugeValue,
 		1.0,
-		target, resource.BoardName, resource.CPU, resource.Version, resource.Platform,
+		resource.BoardName, resource.CPU, resource.Version, resource.Platform,
 	)
 
 	// CPU metrics
 	if cpuCores, err := parseUint64(resource.CPUCount); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.cpuCoresDesc, prometheus.GaugeValue, float64(cpuCores), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.cpuCoresDesc, prometheus.GaugeValue, float64(cpuCores))
 	}
 	if cpuFreq, err := parseUint64(resource.CPUFrequency); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.cpuFreqDesc, prometheus.GaugeValue, float64(cpuFreq), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.cpuFreqDesc, prometheus.GaugeValue, float64(cpuFreq))
 	}
 	if cpuLoad, err := parseUint64(resource.CPULoad); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.cpuLoadDesc, prometheus.GaugeValue, float64(cpuLoad), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.cpuLoadDesc, prometheus.GaugeValue, float64(cpuLoad))
 	}
 
 	// Disk metrics
 	if totalDisk, err := parseUint64(resource.TotalHDDSpace); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.totalDiskDesc, prometheus.GaugeValue, float64(totalDisk), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.totalDiskDesc, prometheus.GaugeValue, float64(totalDisk))
 	}
 	if freeDisk, err := parseUint64(resource.FreeHDDSpace); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.freeDiskDesc, prometheus.GaugeValue, float64(freeDisk), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.freeDiskDesc, prometheus.GaugeValue, float64(freeDisk))
 	}
 	if badBlocks, err := parseUint64(resource.BadBlocks); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.badBlocksDesc, prometheus.GaugeValue, float64(badBlocks), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.badBlocksDesc, prometheus.GaugeValue, float64(badBlocks))
 	}
 	if writeSectTotal, err := parseUint64(resource.WriteSectTotal); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.writeSectTotalDesc, prometheus.CounterValue, float64(writeSectTotal), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.writeSectTotalDesc, prometheus.CounterValue, float64(writeSectTotal))
 	}
 
 	// Memory metrics
 	if totalMemory, err := parseUint64(resource.TotalMemory); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.totalMemoryDesc, prometheus.GaugeValue, float64(totalMemory), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.totalMemoryDesc, prometheus.GaugeValue, float64(totalMemory))
 	}
 	if freeMemory, err := parseUint64(resource.FreeMemory); err == nil {
-		ch <- prometheus.MustNewConstMetric(c.freeMemoryDesc, prometheus.GaugeValue, float64(freeMemory), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.freeMemoryDesc, prometheus.GaugeValue, float64(freeMemory))
 	}
 
 	// Uptime metric
 	if uptime := parseUptime(resource.Uptime); uptime > 0 {
-		ch <- prometheus.MustNewConstMetric(c.uptimeDesc, prometheus.GaugeValue, float64(uptime), targetLabel...)
+		ch <- prometheus.MustNewConstMetric(c.uptimeDesc, prometheus.GaugeValue, float64(uptime))
+	}
+
+	// Fetch system health data
+	health, err := c.fetchSystemHealth(ctx, target, auth)
+	if err != nil {
+		// Health data is optional, log but don't fail
+		log.Printf("Warning: failed to fetch system health: %v", err)
+	} else {
+		// Process health metrics
+		for _, item := range health {
+			if value, err := strconv.ParseFloat(item.Value, 64); err == nil {
+				switch item.Name {
+				case "voltage":
+					ch <- prometheus.MustNewConstMetric(c.voltageDesc, prometheus.GaugeValue, value)
+				case "temperature":
+					ch <- prometheus.MustNewConstMetric(c.temperatureDesc, prometheus.GaugeValue, value)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -258,7 +298,41 @@ func parseUint64(s string) (uint64, error) {
 	return strconv.ParseUint(s, 10, 64)
 }
 
-// parseUptime converts Mikrotik uptime format to seconds
+// fetchSystemHealth fetches system health data from Mikrotik REST API
+func (c *Collector) fetchSystemHealth(ctx context.Context, target string, auth collector.AuthInfo) ([]SystemHealthData, error) {
+	url := fmt.Sprintf("http://%s/rest/system/health", target)
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SetBasicAuth(auth.Username, auth.Password)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, resp.Status)
+	}
+
+	var health []SystemHealthData
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return nil, err
+	}
+
+	return health, nil
+}
+
+// parseUptime parses Mikrotik uptime format to seconds
 // Format examples: "2w4d1h12m27s", "1h30m", "45s"
 func parseUptime(uptimeStr string) int64 {
 	if uptimeStr == "" {

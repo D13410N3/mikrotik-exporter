@@ -11,6 +11,7 @@ import (
 	"github.com/mikrotik-exporter/collector"
 	"github.com/mikrotik-exporter/collector/bgp"
 	"github.com/mikrotik-exporter/collector/dhcp"
+	"github.com/mikrotik-exporter/collector/firewall"
 	"github.com/mikrotik-exporter/collector/interfaces"
 	"github.com/mikrotik-exporter/collector/system"
 	"github.com/mikrotik-exporter/collector/wireless"
@@ -23,6 +24,7 @@ import (
 var (
 	cfg               *config.Config
 	collectorRegistry *collector.Registry
+	metricsNamespace  string
 )
 
 func init() {
@@ -35,7 +37,7 @@ func main() {
 	listenAddr := getEnv("LISTEN_ADDR", "0.0.0.0")
 	listenPort := getEnv("LISTEN_PORT", "9261")
 	configFile := getEnv("CONFIG_FILE", "./config.yaml")
-	metricsNamespace := getEnv("METRICS_NAMESPACE", "mikrotik_exporter")
+	metricsNamespace = getEnv("METRICS_NAMESPACE", "mikrotik_exporter")
 
 	// Register collectors with namespace
 	interfacesCollector := interfaces.NewCollector()
@@ -57,6 +59,10 @@ func main() {
 	wirelessCollector := wireless.NewCollector()
 	wirelessCollector.SetNamespace(metricsNamespace)
 	collectorRegistry.Register(wirelessCollector)
+
+	firewallCollector := firewall.NewCollector()
+	firewallCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(firewallCollector)
 
 	// Load configuration
 	var err error
@@ -132,6 +138,12 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 		target:     target,
 		auth:       collector.AuthInfo{Username: authConfig.Username, Password: authConfig.Password},
 		collectors: enabledCollectors,
+		collectorSuccess: prometheus.NewDesc(
+			metricsNamespace+"_collector_success",
+			"Whether a collector succeeded (1) or failed (0)",
+			[]string{"collector"},
+			nil,
+		),
 	}
 
 	registry.MustRegister(probeCollector)
@@ -246,14 +258,16 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 // ProbeCollector implements prometheus.Collector for multi-target probing
 type ProbeCollector struct {
-	target     string
-	auth       collector.AuthInfo
-	collectors []collector.Collector
-	ctx        context.Context
-	errors     []error
+	target           string
+	auth             collector.AuthInfo
+	collectors       []collector.Collector
+	ctx              context.Context
+	errors           []error
+	collectorSuccess *prometheus.Desc
 }
 
 func (pc *ProbeCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- pc.collectorSuccess
 	for _, c := range pc.collectors {
 		c.Describe(ch)
 	}
@@ -262,11 +276,21 @@ func (pc *ProbeCollector) Describe(ch chan<- *prometheus.Desc) {
 func (pc *ProbeCollector) Collect(ch chan<- prometheus.Metric) {
 	pc.errors = nil // Reset errors for each collection
 	for _, c := range pc.collectors {
+		success := 1.0
 		if err := c.Collect(pc.ctx, pc.target, pc.auth, ch); err != nil {
 			log.Printf("Error collecting metrics from %s collector: %v", c.Name(), err)
 			pc.errors = append(pc.errors, fmt.Errorf("%s: %w", c.Name(), err))
+			success = 0.0
 			// Continue with other collectors even if one fails
 		}
+
+		// Emit collector success metric
+		ch <- prometheus.MustNewConstMetric(
+			pc.collectorSuccess,
+			prometheus.GaugeValue,
+			success,
+			c.Name(),
+		)
 	}
 }
 

@@ -52,7 +52,7 @@ func (c *Collector) initMetrics() {
 	c.boundDesc = prometheus.NewDesc(
 		c.namespace+"_dhcp_bound",
 		"DHCP lease bound status (1 = bound, 0 = not bound)",
-		[]string{"target", "ip", "mac", "dhcp_server", "hostname"},
+		[]string{"ip", "mac", "dhcp_server", "hostname"},
 		nil,
 	)
 }
@@ -109,7 +109,13 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 			continue
 		}
 
-		labels := []string{target, ip, mac, dhcpServer, hostname}
+		// Create labels for this lease
+		labels := []string{
+			ip,
+			mac,
+			dhcpServer,
+			hostname,
+		}
 
 		// DHCP bound status
 		boundValue := 0.0

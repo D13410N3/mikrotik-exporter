@@ -16,16 +16,16 @@ import (
 
 // Collector implements the collector.Collector interface for wireless metrics
 type Collector struct {
-	connectedDesc *prometheus.Desc
-	txBytesDesc   *prometheus.Desc
-	txPacketsDesc *prometheus.Desc
-	rxBytesDesc   *prometheus.Desc
-	rxPacketsDesc *prometheus.Desc
-	rxRateDesc    *prometheus.Desc
-	txRateDesc    *prometheus.Desc
-	uptimeDesc    *prometheus.Desc
-	signalDesc    *prometheus.Desc
-	namespace     string
+	clientInfoDesc *prometheus.Desc
+	txBytesDesc    *prometheus.Desc
+	txPacketsDesc  *prometheus.Desc
+	rxBytesDesc    *prometheus.Desc
+	rxPacketsDesc  *prometheus.Desc
+	rxRateDesc     *prometheus.Desc
+	txRateDesc     *prometheus.Desc
+	uptimeDesc     *prometheus.Desc
+	signalDesc     *prometheus.Desc
+	namespace      string
 }
 
 // WirelessRegistrationData represents the structure returned by Mikrotik WiFi registration table API
@@ -56,52 +56,53 @@ func NewCollector() *Collector {
 
 // initMetrics initializes the metric descriptors with the current namespace
 func (c *Collector) initMetrics() {
-	labels := []string{"target", "mac", "interface", "ssid"}
+	clientInfoLabels := []string{"mac", "interface", "ssid"}
+	macLabel := []string{"mac"}
 
-	c.connectedDesc = prometheus.NewDesc(
-		c.namespace+"_wireless_connected",
-		"Wireless client connected status (always 1 for connected clients)",
-		labels, nil,
+	c.clientInfoDesc = prometheus.NewDesc(
+		c.namespace+"_wireless_client_info",
+		"Wireless client information (always 1 for connected clients)",
+		clientInfoLabels, nil,
 	)
 	c.txBytesDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_tx_bytes_total",
 		"Number of bytes transmitted by wireless client",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.txPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_tx_packets_total",
 		"Number of packets transmitted by wireless client",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.rxBytesDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_rx_bytes_total",
 		"Number of bytes received by wireless client",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.rxPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_rx_packets_total",
 		"Number of packets received by wireless client",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.rxRateDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_rx_rate",
 		"Wireless RX rate in bits per second",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.txRateDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_tx_rate",
 		"Wireless TX rate in bits per second",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.uptimeDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_uptime",
 		"Wireless client uptime in seconds",
-		labels, nil,
+		macLabel, nil,
 	)
 	c.signalDesc = prometheus.NewDesc(
 		c.namespace+"_wireless_signal",
-		"Wireless signal strength in dBm",
-		labels, nil,
+		"Wireless client signal strength in dBm",
+		macLabel, nil,
 	)
 }
 
@@ -112,7 +113,7 @@ func (c *Collector) Name() string {
 
 // Describe sends the descriptors of each metric over to the provided channel
 func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- c.connectedDesc
+	ch <- c.clientInfoDesc
 	ch <- c.txBytesDesc
 	ch <- c.txPacketsDesc
 	ch <- c.rxBytesDesc
@@ -139,39 +140,40 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 
 	// Process each wireless client
 	for _, reg := range registrations {
-		labels := []string{target, reg.MacAddress, reg.Interface, reg.SSID}
+		clientInfoLabels := []string{reg.MacAddress, reg.Interface, reg.SSID}
+		macLabels := []string{reg.MacAddress}
 
-		// Connected status (always 1 for entries in registration table)
-		ch <- prometheus.MustNewConstMetric(c.connectedDesc, prometheus.GaugeValue, 1.0, labels...)
+		// Client info (always 1 for entries in registration table)
+		ch <- prometheus.MustNewConstMetric(c.clientInfoDesc, prometheus.GaugeValue, 1.0, clientInfoLabels...)
 
 		// Parse bytes (format: "tx_bytes,rx_bytes")
 		if txBytes, rxBytes, err := parseCommaSeparatedPair(reg.Bytes); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txBytesDesc, prometheus.CounterValue, float64(txBytes), labels...)
-			ch <- prometheus.MustNewConstMetric(c.rxBytesDesc, prometheus.CounterValue, float64(rxBytes), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txBytesDesc, prometheus.CounterValue, float64(txBytes), macLabels...)
+			ch <- prometheus.MustNewConstMetric(c.rxBytesDesc, prometheus.CounterValue, float64(rxBytes), macLabels...)
 		}
 
 		// Parse packets (format: "tx_packets,rx_packets")
 		if txPackets, rxPackets, err := parseCommaSeparatedPair(reg.Packets); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txPacketsDesc, prometheus.CounterValue, float64(txPackets), labels...)
-			ch <- prometheus.MustNewConstMetric(c.rxPacketsDesc, prometheus.CounterValue, float64(rxPackets), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txPacketsDesc, prometheus.CounterValue, float64(txPackets), macLabels...)
+			ch <- prometheus.MustNewConstMetric(c.rxPacketsDesc, prometheus.CounterValue, float64(rxPackets), macLabels...)
 		}
 
 		// RX/TX rates
 		if rxRate, err := parseUint64(reg.RxRate); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.rxRateDesc, prometheus.GaugeValue, float64(rxRate), labels...)
+			ch <- prometheus.MustNewConstMetric(c.rxRateDesc, prometheus.GaugeValue, float64(rxRate), macLabels...)
 		}
 		if txRate, err := parseUint64(reg.TxRate); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txRateDesc, prometheus.GaugeValue, float64(txRate), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txRateDesc, prometheus.GaugeValue, float64(txRate), macLabels...)
 		}
 
 		// Uptime
 		if uptime := parseUptime(reg.Uptime); uptime > 0 {
-			ch <- prometheus.MustNewConstMetric(c.uptimeDesc, prometheus.GaugeValue, float64(uptime), labels...)
+			ch <- prometheus.MustNewConstMetric(c.uptimeDesc, prometheus.GaugeValue, float64(uptime), macLabels...)
 		}
 
 		// Signal strength
 		if signal, err := strconv.ParseFloat(reg.Signal, 64); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.signalDesc, prometheus.GaugeValue, signal, labels...)
+			ch <- prometheus.MustNewConstMetric(c.signalDesc, prometheus.GaugeValue, signal, macLabels...)
 		}
 	}
 

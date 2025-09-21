@@ -78,89 +78,90 @@ func NewCollector() *Collector {
 
 // initMetrics initializes the metric descriptors with the current namespace
 func (c *Collector) initMetrics() {
-	labels := []string{"target", "mac", "name", "type"}
+	allLabels := []string{"mac", "name", "type"}
+	basicLabels := []string{"name", "type"}
 
 	// Interface status metrics
 	c.enabledDesc = prometheus.NewDesc(
 		c.namespace+"_interface_enabled",
 		"Interface enabled status (1 = enabled, 0 = disabled)",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.upDesc = prometheus.NewDesc(
 		c.namespace+"_interface_up",
 		"Interface running status (1 = running, 0 = not running)",
-		labels, nil,
+		allLabels, nil,
 	)
 
 	// RX metrics
 	c.rxBytesDesc = prometheus.NewDesc(
 		c.namespace+"_interface_rx_bytes_total",
 		"Number of bytes received on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.rxPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_interface_rx_packets_total",
 		"Number of packets received on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.fpRxBytesDesc = prometheus.NewDesc(
 		c.namespace+"_interface_fp_rx_bytes_total",
 		"Number of fast path bytes received on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.fpRxPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_interface_fp_rx_packets_total",
 		"Number of fast path packets received on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 
 	// TX metrics
 	c.txBytesDesc = prometheus.NewDesc(
 		c.namespace+"_interface_tx_bytes_total",
 		"Number of bytes transmitted on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.txPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_interface_tx_packets_total",
 		"Number of packets transmitted on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.fpTxBytesDesc = prometheus.NewDesc(
 		c.namespace+"_interface_fp_tx_bytes_total",
 		"Number of fast path bytes transmitted on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.fpTxPacketsDesc = prometheus.NewDesc(
 		c.namespace+"_interface_fp_tx_packets_total",
 		"Number of fast path packets transmitted on interface",
-		labels, nil,
+		basicLabels, nil,
 	)
 	c.txQueueDropDesc = prometheus.NewDesc(
 		c.namespace+"_interface_tx_queue_drop_total",
 		"Number of packets dropped from TX queue",
-		labels, nil,
+		basicLabels, nil,
 	)
 
 	// Interface properties
 	c.mtuDesc = prometheus.NewDesc(
 		c.namespace+"_interface_mtu",
-		"Interface MTU size",
-		labels, nil,
+		"Interface MTU in bytes",
+		basicLabels, nil,
 	)
 	c.linkDownsDesc = prometheus.NewDesc(
 		c.namespace+"_interface_link_downs_total",
-		"Number of times interface went down",
-		labels, nil,
+		"Number of link down events",
+		basicLabels, nil,
 	)
 	c.lastLinkUpDesc = prometheus.NewDesc(
-		c.namespace+"_interface_last_link_up",
-		"Timestamp of last link up event",
-		labels, nil,
+		c.namespace+"_interface_last_link_up_time",
+		"Last link up time (Unix timestamp)",
+		basicLabels, nil,
 	)
 	c.lastLinkDownDesc = prometheus.NewDesc(
-		c.namespace+"_interface_last_link_down",
-		"Timestamp of last link down event",
-		labels, nil,
+		c.namespace+"_interface_last_link_down_time",
+		"Last link down time (Unix timestamp)",
+		basicLabels, nil,
 	)
 }
 
@@ -204,66 +205,67 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 
 	// Process each interface
 	for _, iface := range interfaces {
-		labels := []string{target, iface.MacAddress, iface.Name, iface.Type}
+		allLabels := []string{iface.MacAddress, iface.Name, iface.Type}
+		basicLabels := []string{iface.Name, iface.Type}
 
 		// Interface status metrics
 		enabledValue := 0.0
 		if iface.Disabled != "true" {
 			enabledValue = 1.0
 		}
-		ch <- prometheus.MustNewConstMetric(c.enabledDesc, prometheus.GaugeValue, enabledValue, labels...)
+		ch <- prometheus.MustNewConstMetric(c.enabledDesc, prometheus.GaugeValue, enabledValue, basicLabels...)
 
 		upValue := 0.0
 		if iface.Running == "true" {
 			upValue = 1.0
 		}
-		ch <- prometheus.MustNewConstMetric(c.upDesc, prometheus.GaugeValue, upValue, labels...)
+		ch <- prometheus.MustNewConstMetric(c.upDesc, prometheus.GaugeValue, upValue, allLabels...)
 
 		// RX metrics
 		if rxBytes, err := parseUint64(iface.RxByte); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.rxBytesDesc, prometheus.CounterValue, float64(rxBytes), labels...)
+			ch <- prometheus.MustNewConstMetric(c.rxBytesDesc, prometheus.CounterValue, float64(rxBytes), basicLabels...)
 		}
 		if rxPackets, err := parseUint64(iface.RxPacket); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.rxPacketsDesc, prometheus.CounterValue, float64(rxPackets), labels...)
+			ch <- prometheus.MustNewConstMetric(c.rxPacketsDesc, prometheus.CounterValue, float64(rxPackets), basicLabels...)
 		}
 		if fpRxBytes, err := parseUint64(iface.FpRxByte); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.fpRxBytesDesc, prometheus.CounterValue, float64(fpRxBytes), labels...)
+			ch <- prometheus.MustNewConstMetric(c.fpRxBytesDesc, prometheus.CounterValue, float64(fpRxBytes), basicLabels...)
 		}
 		if fpRxPackets, err := parseUint64(iface.FpRxPacket); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.fpRxPacketsDesc, prometheus.CounterValue, float64(fpRxPackets), labels...)
+			ch <- prometheus.MustNewConstMetric(c.fpRxPacketsDesc, prometheus.CounterValue, float64(fpRxPackets), basicLabels...)
 		}
 
 		// TX metrics
 		if txBytes, err := parseUint64(iface.TxByte); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txBytesDesc, prometheus.CounterValue, float64(txBytes), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txBytesDesc, prometheus.CounterValue, float64(txBytes), basicLabels...)
 		}
 		if txPackets, err := parseUint64(iface.TxPacket); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txPacketsDesc, prometheus.CounterValue, float64(txPackets), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txPacketsDesc, prometheus.CounterValue, float64(txPackets), basicLabels...)
 		}
 		if fpTxBytes, err := parseUint64(iface.FpTxByte); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.fpTxBytesDesc, prometheus.CounterValue, float64(fpTxBytes), labels...)
+			ch <- prometheus.MustNewConstMetric(c.fpTxBytesDesc, prometheus.CounterValue, float64(fpTxBytes), basicLabels...)
 		}
 		if fpTxPackets, err := parseUint64(iface.FpTxPacket); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.fpTxPacketsDesc, prometheus.CounterValue, float64(fpTxPackets), labels...)
+			ch <- prometheus.MustNewConstMetric(c.fpTxPacketsDesc, prometheus.CounterValue, float64(fpTxPackets), basicLabels...)
 		}
 		if txQueueDrop, err := parseUint64(iface.TxQueueDrop); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.txQueueDropDesc, prometheus.CounterValue, float64(txQueueDrop), labels...)
+			ch <- prometheus.MustNewConstMetric(c.txQueueDropDesc, prometheus.CounterValue, float64(txQueueDrop), basicLabels...)
 		}
 
 		// Interface properties
 		if mtu, err := parseUint64(iface.MTU); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.mtuDesc, prometheus.GaugeValue, float64(mtu), labels...)
+			ch <- prometheus.MustNewConstMetric(c.mtuDesc, prometheus.GaugeValue, float64(mtu), basicLabels...)
 		}
 		if linkDowns, err := parseUint64(iface.LinkDowns); err == nil {
-			ch <- prometheus.MustNewConstMetric(c.linkDownsDesc, prometheus.CounterValue, float64(linkDowns), labels...)
+			ch <- prometheus.MustNewConstMetric(c.linkDownsDesc, prometheus.CounterValue, float64(linkDowns), basicLabels...)
 		}
 
-		// Timestamp metrics
+		// Last link up/down times
 		if lastLinkUp := parseTimestamp(iface.LastLinkUpTime); lastLinkUp > 0 {
-			ch <- prometheus.MustNewConstMetric(c.lastLinkUpDesc, prometheus.GaugeValue, float64(lastLinkUp), labels...)
+			ch <- prometheus.MustNewConstMetric(c.lastLinkUpDesc, prometheus.GaugeValue, float64(lastLinkUp), basicLabels...)
 		}
 		if lastLinkDown := parseTimestamp(iface.LastLinkDownTime); lastLinkDown > 0 {
-			ch <- prometheus.MustNewConstMetric(c.lastLinkDownDesc, prometheus.GaugeValue, float64(lastLinkDown), labels...)
+			ch <- prometheus.MustNewConstMetric(c.lastLinkDownDesc, prometheus.GaugeValue, float64(lastLinkDown), basicLabels...)
 		}
 	}
 

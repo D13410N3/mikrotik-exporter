@@ -15,8 +15,9 @@ A Prometheus exporter for Mikrotik devices using the REST API (RouterOS 7.x+). T
 - **interfaces**: Network interface metrics (RX/TX bytes, packets, status)
 - **dhcp**: DHCP server and lease metrics
 - **bgp**: BGP peer status and prefix information
-- **system**: System metrics (uptime, CPU, memory, disk, temperature)
+- **system**: System metrics (uptime, CPU, memory, disk)
 - **wireless**: Wireless interface and client metrics
+- **firewall**: Firewall rule metrics (enabled status, bytes, packets, rule info)
 
 ## Configuration
 
@@ -51,6 +52,7 @@ modules:
       bgp: true
       system: true
       wireless: true
+      firewall: true
       
   minimal:
     collectors:
@@ -172,24 +174,87 @@ type Collector interface {
 - Mikrotik RouterOS 7.x+ (with REST API support)
 - Prometheus
 
+## Available Metrics
+
+### Interface Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `interface_enabled` | gauge | Interface enabled status (1=enabled, 0=disabled) | name, type |
+| `interface_up` | gauge | Interface running status (1=running, 0=not running) | mac, name, type |
+| `interface_rx_bytes_total` | counter | Total bytes received on interface | name, type |
+| `interface_rx_packets_total` | counter | Total packets received on interface | name, type |
+| `interface_tx_bytes_total` | counter | Total bytes transmitted on interface | name, type |
+| `interface_tx_packets_total` | counter | Total packets transmitted on interface | name, type |
+| `interface_fp_rx_bytes_total` | counter | Fast path bytes received on interface | name, type |
+| `interface_fp_rx_packets_total` | counter | Fast path packets received on interface | name, type |
+| `interface_fp_tx_bytes_total` | counter | Fast path bytes transmitted on interface | name, type |
+| `interface_fp_tx_packets_total` | counter | Fast path packets transmitted on interface | name, type |
+| `interface_tx_queue_drop_total` | counter | Packets dropped from TX queue | name, type |
+| `interface_mtu` | gauge | Interface MTU in bytes | name, type |
+| `interface_link_downs_total` | counter | Number of link down events | name, type |
+| `interface_last_link_up_time` | gauge | Last link up time (Unix timestamp) | name, type |
+| `interface_last_link_down_time` | gauge | Last link down time (Unix timestamp) | name, type |
+
+### DHCP Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `dhcp_bound` | gauge | DHCP lease bound status (1=bound, 0=not bound) | ip, mac, dhcp_server, hostname |
+
+### BGP Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `bgp_session_up` | gauge | BGP session status (1=established, 0=not established) | name |
+| `bgp_session_prefix_count` | gauge | Number of prefixes in BGP session | name |
+| `bgp_session_remote_bytes_total` | counter | Total bytes received from remote BGP peer | name |
+| `bgp_session_remote_messages_total` | counter | Total messages received from remote BGP peer | name |
+| `bgp_session_local_bytes_total` | counter | Total bytes sent to remote BGP peer | name |
+| `bgp_session_local_messages_total` | counter | Total messages sent to remote BGP peer | name |
+| `bgp_session_uptime` | gauge | BGP session uptime in seconds | name |
+| `bgp_session_info` | gauge | BGP session information (always 1) | name, remote_address, remote_id, remote_as, local_address, local_id, local_as |
+
+### System Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `system_info` | gauge | System information (always 1) | board_name, cpu_model, version, platform |
+| `system_cpu_cores` | gauge | Number of CPU cores | - |
+| `system_cpu_freq` | gauge | CPU frequency in MHz | - |
+| `system_cpu_load` | gauge | CPU load percentage | - |
+| `system_total_disk` | gauge | Total disk space in bytes | - |
+| `system_free_disk` | gauge | Free disk space in bytes | - |
+| `system_bad_blocks` | gauge | Number of bad blocks | - |
+| `system_write_sect_total` | counter | Total write sectors | - |
+| `system_total_memory` | gauge | Total memory in bytes | - |
+| `system_free_memory` | gauge | Free memory in bytes | - |
+| `system_uptime` | gauge | System uptime in seconds | - |
+| `system_voltage` | gauge | System voltage in volts | - |
+| `system_temperature` | gauge | System temperature in Celsius | - |
+
+### Wireless Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `wireless_client_info` | gauge | Wireless client information (always 1 for connected clients) | mac, interface, ssid |
+| `wireless_tx_bytes_total` | counter | Total bytes transmitted to wireless client | mac |
+| `wireless_tx_packets_total` | counter | Total packets transmitted to wireless client | mac |
+| `wireless_rx_bytes_total` | counter | Total bytes received from wireless client | mac |
+| `wireless_rx_packets_total` | counter | Total packets received from wireless client | mac |
+| `wireless_rx_rate` | gauge | Wireless client RX rate in bps | mac |
+| `wireless_tx_rate` | gauge | Wireless client TX rate in bps | mac |
+| `wireless_uptime` | gauge | Wireless client connection uptime in seconds | mac |
+| `wireless_signal` | gauge | Wireless client signal strength in dBm | mac |
+
+### Firewall Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `firewall_rule_enabled` | gauge | Firewall rule enabled status (1=enabled, 0=disabled) | id, table |
+| `firewall_rule_bytes` | counter | Number of bytes matched by firewall rule | id, table |
+| `firewall_rule_packets` | counter | Number of packets matched by firewall rule | id, table |
+| `firewall_rule_info` | gauge | Firewall rule information (always 1) | id, table, chain, action, comment |
+
+### Exporter Metrics
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `collector_success` | gauge | Whether a collector succeeded (1) or failed (0) | collector |
+
 ## License
 
 MIT License
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## TODO
-
-- [ ] Implement actual REST API calls to Mikrotik devices
-- [ ] Add comprehensive error handling and logging
-- [ ] Add unit tests for collectors
-- [ ] Add integration tests
-- [ ] Add more collectors (firewall, queues, etc.)
-- [ ] Add TLS support for secure connections
-- [ ] Add caching mechanism for better performance

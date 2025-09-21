@@ -79,49 +79,49 @@ func (c *Collector) initMetrics() {
 	c.sessionUpDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_up",
 		"BGP session status (1 = established, 0 = not established)",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.prefixCountDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_prefix_count",
 		"Number of prefixes in BGP session",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.remoteBytesTotalDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_remote_bytes_total",
 		"Total bytes received from remote BGP peer",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.remoteMessagesTotalDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_remote_messages_total",
 		"Total messages received from remote BGP peer",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.localBytesDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_local_bytes_total",
 		"Total bytes sent to remote BGP peer",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.localMessagesTotalDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_local_messages_total",
 		"Total messages sent to remote BGP peer",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.uptimeDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_uptime",
 		"BGP session uptime in seconds",
-		[]string{"target", "name"},
+		[]string{"name"},
 		nil,
 	)
 	c.sessionInfoDesc = prometheus.NewDesc(
 		c.namespace+"_bgp_session_info",
 		"BGP session information",
-		[]string{"target", "name", "remote_address", "remote_id", "remote_as", "local_address", "local_id", "local_as"},
+		[]string{"name", "remote_address", "remote_id", "remote_as", "local_address", "local_id", "local_as"},
 		nil,
 	)
 }
@@ -164,7 +164,7 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 			continue
 		}
 
-		labels := []string{target, session.Name}
+		labels := []string{session.Name}
 
 		// BGP session up status
 		sessionUp := 0.0
@@ -178,34 +178,29 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 			ch <- prometheus.MustNewConstMetric(c.prefixCountDesc, prometheus.GaugeValue, prefixCount, labels...)
 		}
 
-		// Remote bytes total
+		// Remote bytes and messages
 		if remoteBytes, err := c.parseNumericField(session.RemoteBytes); err == nil {
 			ch <- prometheus.MustNewConstMetric(c.remoteBytesTotalDesc, prometheus.CounterValue, remoteBytes, labels...)
 		}
-
-		// Remote messages total
 		if remoteMessages, err := c.parseNumericField(session.RemoteMessages); err == nil {
 			ch <- prometheus.MustNewConstMetric(c.remoteMessagesTotalDesc, prometheus.CounterValue, remoteMessages, labels...)
 		}
 
-		// Local bytes total
+		// Local bytes and messages
 		if localBytes, err := c.parseNumericField(session.LocalBytes); err == nil {
 			ch <- prometheus.MustNewConstMetric(c.localBytesDesc, prometheus.CounterValue, localBytes, labels...)
 		}
-
-		// Local messages total
 		if localMessages, err := c.parseNumericField(session.LocalMessages); err == nil {
 			ch <- prometheus.MustNewConstMetric(c.localMessagesTotalDesc, prometheus.CounterValue, localMessages, labels...)
 		}
 
 		// Uptime
-		if uptime, err := c.parseUptime(session.Uptime); err == nil {
+		if uptime, err := c.parseUptime(session.Uptime); err == nil && uptime > 0 {
 			ch <- prometheus.MustNewConstMetric(c.uptimeDesc, prometheus.GaugeValue, uptime, labels...)
 		}
 
 		// Session info
 		infoLabels := []string{
-			target,
 			session.Name,
 			session.RemoteAddress,
 			session.RemoteID,
