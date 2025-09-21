@@ -180,7 +180,7 @@ type Collector interface {
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
 | `interface_enabled` | gauge | Interface enabled status (1=enabled, 0=disabled) | name, type |
-| `interface_up` | gauge | Interface running status (1=running, 0=not running) | mac, name, type |
+| `interface_up` | gauge | Interface running status (1=running, 0=not running) | mac, name, type, comment |
 | `interface_rx_bytes_total` | counter | Total bytes received on interface | name, type |
 | `interface_rx_packets_total` | counter | Total packets received on interface | name, type |
 | `interface_tx_bytes_total` | counter | Total bytes transmitted on interface | name, type |

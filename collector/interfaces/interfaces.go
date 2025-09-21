@@ -44,6 +44,7 @@ type Collector struct {
 type InterfaceData struct {
 	ID               string `json:".id"`
 	ActualMTU        string `json:"actual-mtu"`
+	Comment          string `json:"comment"`
 	DefaultName      string `json:"default-name"`
 	Disabled         string `json:"disabled"`
 	FpRxByte         string `json:"fp-rx-byte"`
@@ -78,7 +79,7 @@ func NewCollector() *Collector {
 
 // initMetrics initializes the metric descriptors with the current namespace
 func (c *Collector) initMetrics() {
-	allLabels := []string{"mac", "name", "type"}
+	allLabels := []string{"mac", "name", "type", "comment"}
 	basicLabels := []string{"name", "type"}
 
 	// Interface status metrics
@@ -205,7 +206,11 @@ func (c *Collector) Collect(ctx context.Context, target string, auth collector.A
 
 	// Process each interface
 	for _, iface := range interfaces {
-		allLabels := []string{iface.MacAddress, iface.Name, iface.Type}
+		comment := iface.Comment
+		if comment == "" {
+			comment = ""
+		}
+		allLabels := []string{iface.MacAddress, iface.Name, iface.Type, comment}
 		basicLabels := []string{iface.Name, iface.Type}
 
 		// Interface status metrics
