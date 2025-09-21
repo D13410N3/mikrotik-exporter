@@ -25,6 +25,7 @@ A Prometheus exporter for Mikrotik devices using the REST API (RouterOS 7.x+). T
 - `LISTEN_ADDR`: Listen address (default: `0.0.0.0`)
 - `LISTEN_PORT`: Listen port (default: `9261`)
 - `CONFIG_FILE`: Configuration file path (default: `./config.yaml`)
+- `METRICS_NAMESPACE`: Metrics namespace (default: `mikrotik_exporter`)
 
 ### Configuration File
 

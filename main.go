@@ -17,6 +17,7 @@ import (
 	"github.com/mikrotik-exporter/config"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/expfmt"
 )
 
 var (
@@ -142,9 +143,35 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 	// Store context in the collector for use during collection
 	probeCollector.ctx = ctx
 
-	// Serve metrics
-	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
-	h.ServeHTTP(w, r)
+	// Create a custom gatherer to check for errors
+	gatherer := registry
+	metricFamilies, err := gatherer.Gather()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Error gathering metrics: %v", err), 499)
+		return
+	}
+
+	// Check if any collectors had errors
+	if len(probeCollector.errors) > 0 {
+		errorMsg := "Collector errors: "
+		for i, collectorErr := range probeCollector.errors {
+			if i > 0 {
+				errorMsg += "; "
+			}
+			errorMsg += collectorErr.Error()
+		}
+		http.Error(w, errorMsg, 499)
+		return
+	}
+
+	// Serve metrics normally if no errors
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	for _, mf := range metricFamilies {
+		if _, err := expfmt.MetricFamilyToText(w, mf); err != nil {
+			log.Printf("Error writing metrics: %v", err)
+			return
+		}
+	}
 }
 
 func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
@@ -223,6 +250,7 @@ type ProbeCollector struct {
 	auth       collector.AuthInfo
 	collectors []collector.Collector
 	ctx        context.Context
+	errors     []error
 }
 
 func (pc *ProbeCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -232,9 +260,11 @@ func (pc *ProbeCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (pc *ProbeCollector) Collect(ch chan<- prometheus.Metric) {
+	pc.errors = nil // Reset errors for each collection
 	for _, c := range pc.collectors {
 		if err := c.Collect(pc.ctx, pc.target, pc.auth, ch); err != nil {
 			log.Printf("Error collecting metrics from %s collector: %v", c.Name(), err)
+			pc.errors = append(pc.errors, fmt.Errorf("%s: %w", c.Name(), err))
 			// Continue with other collectors even if one fails
 		}
 	}
