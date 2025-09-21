@@ -198,7 +198,7 @@ type Collector interface {
 ### DHCP Metrics
 | Metric | Type | Description | Labels |
 |--------|------|-------------|--------|
-| `dhcp_bound` | gauge | DHCP lease bound status (1=bound, 0=not bound) | ip, mac, dhcp_server, hostname |
+| `dhcp_bound` | gauge | DHCP lease bound status (1=bound, 0=not bound) | device_ip, mac, dhcp_server, device_hostname |
 
 ### BGP Metrics
 | Metric | Type | Description | Labels |

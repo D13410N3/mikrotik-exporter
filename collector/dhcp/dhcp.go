@@ -52,7 +52,7 @@ func (c *Collector) initMetrics() {
 	c.boundDesc = prometheus.NewDesc(
 		c.namespace+"_dhcp_bound",
 		"DHCP lease bound status (1 = bound, 0 = not bound)",
-		[]string{"ip", "mac", "dhcp_server", "hostname"},
+		[]string{"device_ip", "mac", "dhcp_server", "device_hostname"},
 		nil,
 	)
 }
