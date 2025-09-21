@@ -11,12 +11,15 @@ import (
 type Collector interface {
 	// Name returns the collector name
 	Name() string
-	
+
 	// Describe sends the descriptors of each metric over to the provided channel
 	Describe(ch chan<- *prometheus.Desc)
-	
+
 	// Collect fetches the metrics from Mikrotik device and sends them to Prometheus
 	Collect(ctx context.Context, target string, auth AuthInfo, ch chan<- prometheus.Metric) error
+
+	// SetNamespace sets the metrics namespace prefix
+	SetNamespace(namespace string)
 }
 
 // AuthInfo contains authentication information for connecting to Mikrotik device

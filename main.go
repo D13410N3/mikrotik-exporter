@@ -20,18 +20,13 @@ import (
 )
 
 var (
-	cfg              *config.Config
+	cfg               *config.Config
 	collectorRegistry *collector.Registry
 )
 
 func init() {
-	// Initialize collector registry and register all collectors
+	// Initialize collector registry - collectors will be registered in main() with namespace
 	collectorRegistry = collector.NewRegistry()
-	collectorRegistry.Register(interfaces.NewCollector())
-	collectorRegistry.Register(dhcp.NewCollector())
-	collectorRegistry.Register(bgp.NewCollector())
-	collectorRegistry.Register(system.NewCollector())
-	collectorRegistry.Register(wireless.NewCollector())
 }
 
 func main() {
@@ -39,6 +34,28 @@ func main() {
 	listenAddr := getEnv("LISTEN_ADDR", "0.0.0.0")
 	listenPort := getEnv("LISTEN_PORT", "9261")
 	configFile := getEnv("CONFIG_FILE", "./config.yaml")
+	metricsNamespace := getEnv("METRICS_NAMESPACE", "mikrotik_exporter")
+
+	// Register collectors with namespace
+	interfacesCollector := interfaces.NewCollector()
+	interfacesCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(interfacesCollector)
+
+	dhcpCollector := dhcp.NewCollector()
+	dhcpCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(dhcpCollector)
+
+	bgpCollector := bgp.NewCollector()
+	bgpCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(bgpCollector)
+
+	systemCollector := system.NewCollector()
+	systemCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(systemCollector)
+
+	wirelessCollector := wireless.NewCollector()
+	wirelessCollector.SetNamespace(metricsNamespace)
+	collectorRegistry.Register(wirelessCollector)
 
 	// Load configuration
 	var err error
@@ -51,7 +68,7 @@ func main() {
 	http.HandleFunc("/probe", probeHandler)
 	http.HandleFunc("/health-check", healthCheckHandler)
 	http.HandleFunc("/", indexHandler)
-	
+
 	// Setup metrics with default Go metrics
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(prometheus.NewGoCollector())
@@ -62,7 +79,7 @@ func main() {
 	addr := fmt.Sprintf("%s:%s", listenAddr, listenPort)
 	log.Printf("Starting Mikrotik Prometheus Exporter on %s", addr)
 	log.Printf("Available collectors: %v", collectorRegistry.List())
-	
+
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Failed to start HTTP server: %v", err)
 	}
@@ -101,7 +118,7 @@ func probeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Create a custom registry for this probe
 	registry := prometheus.NewRegistry()
-	
+
 	// Get enabled collectors
 	enabledCollectors := collectorRegistry.GetEnabled(moduleConfig.Collectors)
 	if len(enabledCollectors) == 0 {
